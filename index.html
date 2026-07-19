@@ -1,3 +1,6 @@
+
+
+블리비 홍대점 고객차트 · HTML
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -7,12 +10,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
-
+ 
         table { border-collapse: collapse; width: 100%; table-layout: fixed; }
         col.col-date   { width: 110px; }
         col.col-note   { width: 150px; }
-        col.col-unused { width: 90px; }
-
+        col.col-unused { width: 44px; }
+ 
         th {
             border: 1px solid #e2e8f0; padding: 6px;
             font-size: 14px; background: #f8fafc; color: #64748b;
@@ -49,13 +52,18 @@
             justify-content: flex-start;
         }
         td.cell-date[contenteditable="true"],
-        td.cell-note[contenteditable="true"],
-        td.cell-unused[contenteditable="true"] {
+        td.cell-note[contenteditable="true"] {
             display: flex;
             align-items: center;
             justify-content: center;
         }
-
+ 
+        /* 미사용 체크박스 */
+        .unused-checkbox {
+            width: 16px; height: 16px; cursor: pointer;
+            accent-color: #9ca3af;
+        }
+ 
         /* 툴바 */
         #toolbar {
             position: fixed; display: none;
@@ -73,7 +81,7 @@
         }
         .btn-tool:hover { background: #f1f5f9; }
         .divider { width: 1px; height: 12px; background: #cbd5e1; margin: 0 2px; }
-
+ 
         /* 검색 */
         #searchBar {
             background: transparent; border: none;
@@ -153,7 +161,7 @@
     </style>
 </head>
 <body class="bg-gray-50 p-6">
-
+ 
 <!-- 서식 툴바 -->
 <div id="toolbar" class="flex">
     <div class="toolbar-row">
@@ -161,8 +169,7 @@
         <button class="btn-tool" onclick="fmt('foreColor','#3b82f6')" style="color:#3b82f6" title="파랑">●</button>
         <button class="btn-tool" onclick="fmt('foreColor','#ef4444')" style="color:#ef4444" title="빨강">●</button>
         <button class="btn-tool" onclick="fmt('foreColor','#22c55e')" style="color:#22c55e" title="초록">●</button>
-        <button class="btn-tool" onclick="fmt('foreColor','#8b5cf6')" style="color:#8b5cf6" title="보라">●</button>
-        <button class="btn-tool" onclick="fmt('backColor','#fce7f3')" style="background:#fce7f3" title="연핑크">●</button>
+                <button class="btn-tool" onclick="fmt('backColor','#fce7f3')" style="background:#fce7f3" title="연핑크">●</button>
         <button class="btn-tool" onclick="fmt('backColor','#ede9fe')" style="background:#ede9fe" title="연보라">●</button>
         <button class="btn-tool" onclick="fmt('backColor','#fef3c7')" style="background:#fef3c7" title="연노랑">●</button>
         <button class="btn-tool" onclick="fmt('backColor','#dbeafe')" style="background:#dbeafe" title="연하늘">●</button>
@@ -176,7 +183,7 @@
         <button class="btn-tool" onclick="cutSelection()" title="잘라내기">CUT</button>
     </div>
 </div>
-
+ 
 <!-- 메인 카드 -->
 <div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-sm border border-gray-200 relative">
     <div class="flex flex-col gap-3 mb-5">
@@ -201,7 +208,7 @@
             </div>
         </div>
     </div>
-
+ 
     <table>
         <colgroup>
             <col class="col-date">
@@ -217,11 +224,11 @@
         <tbody id="chartBody"></tbody>
     </table>
 </div>
-
+ 
 <div id="copyModal">
     <div class="modal-card">
         <div class="modal-head">
-            <div class="font-bold text-base">차트 내역 보기</div>
+            <div class="font-bold text-base">내역 다운로드</div>
             <button onclick="closeCopyModal()" class="close-btn" title="닫기">✕</button>
         </div>
         <div class="grid grid-cols-2 gap-3 mb-4">
@@ -241,11 +248,11 @@
         <div id="previewBox" class="preview-box" style="display:none;"></div>
     </div>
 </div>
-
+ 
 <div id="unusedModal">
     <div class="modal-card">
         <div class="modal-head">
-            <div class="font-bold text-base">미사용 시술 정리</div>
+            <div class="font-bold text-base">미사용 시술</div>
             <button onclick="closeUnusedModal()" class="close-btn" title="닫기">✕</button>
         </div>
         <div id="unusedPreviewBox" class="preview-box" style="display:block;"></div>
@@ -254,11 +261,11 @@
         </div>
     </div>
 </div>
-
+ 
 <script>
 const tbody  = document.getElementById('chartBody');
 const toolbar = document.getElementById('toolbar');
-
+ 
 let editingCell = null;   // 현재 편집 중인 td
 let savedSel    = null;   // 툴바용 저장된 selection
 let pendingPasteUndo = null;
@@ -269,7 +276,31 @@ let history = [];
 let historyIndex = -1;
 let currentSearchQuery = '';
 let searchHighlightedRows = [];
-
+ 
+/* ═══════════════════════════════════════
+   기본 샘플 데이터 (미사용 열 제외 디폴트 입력)
+═══════════════════════════════════════ */
+const defaultRows = [
+    { date: '2026-01-20', main: 'VIP200+30(은빈S/26.01.20)', note: '', unused: false },
+    { date: '', main: '블리비S 라이트 50cc 한정가 1-1 53,900원', note: '정우/은지', unused: false },
+    { date: '', main: 'ㄴ팔뚝', note: '', unused: false },
+    { date: '', main: '레디어스 1시린지 체험가 1-1 869,000원', note: '다영/은록', unused: false },
+    { date: '', main: 'ㄴ팔자, 마리오넷', note: '', unused: false },
+    { date: '', main: '총 922,900원', note: '', unused: false },
+    { date: '', main: '<span style="background-color:#fef3c7;">잔액: 1,377,100원</span>', note: '', unused: false },
+    { date: '', main: '회원권 레이저 1회 서비스*KEEP', note: '', unused: true },
+    { date: '2026-02-15', main: '매끈 턱선패키지(사각턱B+턱라인 스킨B+아큐 3cc) 한정가 1-1 40,590원', note: '창현/은지', unused: false },
+    { date: '', main: 'ㄴ아큐주사 이중턱', note: '', unused: false },
+    { date: '', main: '겨드랑이 제모 10-1 41,800원', note: '창현/은록', unused: false },
+    { date: '', main: '다리전체 제모 5회 495,000원 <span style="text-decoration: line-through; text-decoration-style: double; text-decoration-thickness: 2px; text-decoration-color: #ef4444;">*선차감</span> /26-05-03 사용', note: '10/30', unused: false },
+    { date: '', main: '총 577,390원', note: '', unused: false },
+    { date: '', main: '<span style="background-color:#fef3c7;">잔액: 799,710원</span>', note: '', unused: false },
+    { date: '2026-05-03', main: '다리전체제모 5-1 *선차감건', note: '창현/은록', unused: false },
+    { date: '', main: '겨드랑이 제모 10-2', note: '10/30', unused: false },
+    { date: '', main: '프라임 레이즈 90KJ 얼굴전체 체험가 539,000원 <span style="background-color:#ede9fe;">*선차감</span>', note: '', unused: true },
+    { date: '', main: '<span style="background-color:#fef3c7;">잔액: 260,710원</span>', note: '', unused: false }
+];
+ 
 /* ═══════════════════════════════════════
    셀 편집 모드 진입 / 종료
 ═══════════════════════════════════════ */
@@ -290,27 +321,46 @@ function enterEdit(td, placeAtEnd = true) {
         sel.addRange(range);
     }
 }
-
+ 
 function exitEdit() {
     if (!editingCell) return;
     editingCell.contentEditable = 'false';
     editingCell.classList.remove('editing');
     editingCell = null;
 }
-
+ 
 /* ═══════════════════════════════════════
    행 생성
 ═══════════════════════════════════════ */
 function makeRow(content = '') {
     const tr = document.createElement('tr');
-
+ 
     const classes = ['cell-date', 'cell-main', 'cell-note', 'cell-unused'];
     classes.forEach((cls, i) => {
         const td = document.createElement('td');
         td.className = cls;
         td.contentEditable = 'false';
+ 
+        // 미사용 열: 텍스트 입력이 아닌 체크박스
+        if (cls === 'cell-unused') {
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'unused-checkbox';
+            td.appendChild(checkbox);
+ 
+            td.addEventListener('click', () => {
+                const currentRow = td.closest('tr');
+                if (currentRow && searchHighlightedRows.includes(currentRow)) {
+                    clearSearchHighlights();
+                }
+            });
+ 
+            tr.appendChild(td);
+            return;
+        }
+ 
         if (i === 1 && content) td.innerHTML = content;
-
+ 
         // 더블클릭 → 편집 모드
         td.addEventListener('dblclick', (e) => {
             // 날짜 셀: 비어있을 때 더블클릭 → 오늘날짜 입력
@@ -323,7 +373,7 @@ function makeRow(content = '') {
             enterEdit(td);
             e.stopPropagation();
         });
-
+ 
         // 이미 편집 중인 셀 클릭 → 그냥 유지
         td.addEventListener('click', (e) => {
             const currentRow = td.closest('tr');
@@ -332,23 +382,23 @@ function makeRow(content = '') {
             }
             if (editingCell === td) e.stopPropagation();
         });
-
+ 
         td.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') { exitEdit(); return; }
             if (e.key === 'Enter') {
                 if (cls === 'cell-main') {
                     e.preventDefault();
-
+ 
                     const selection = window.getSelection();
                     const range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
                     const cursorPos = getCursorPosition(td, range);
                     const textContent = td.textContent || '';
-
+ 
                     if (cursorPos > 0 && cursorPos < textContent.length) {
                         const beforeText = textContent.slice(0, cursorPos);
                         const afterText = textContent.slice(cursorPos);
                         td.textContent = beforeText;
-
+ 
                         const idx = Array.from(tr.cells).indexOf(td);
                         const next = insertRowAfter(tr);
                         next.cells[idx].textContent = afterText;
@@ -369,7 +419,7 @@ function makeRow(content = '') {
             if (e.key === 'Backspace' || e.key === 'Delete') {
                 const selection = window.getSelection();
                 const hasSelection = selection && selection.rangeCount > 0 && selection.toString().trim() !== '';
-
+ 
                 if (hasSelection) {
                     e.preventDefault();
                     const range = selection.getRangeAt(0);
@@ -384,7 +434,7 @@ function makeRow(content = '') {
                     cellStateCache.set(td, td.innerHTML);
                     return;
                 }
-
+ 
                 if (cls === 'cell-main' && e.key === 'Backspace') {
                     const range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
                     const cursorPos = getCursorPosition(td, range);
@@ -407,7 +457,7 @@ function makeRow(content = '') {
                         }
                     }
                 }
-
+ 
                 if (cls === 'cell-main') {
                     const isEmpty = Array.from(tr.cells).every(
                         c => c.textContent.replace(/\s/g,'') === ''
@@ -432,31 +482,31 @@ function makeRow(content = '') {
                 }
             }
         });
-
+ 
         td.addEventListener('input', handleCellInput);
         if (cls === 'cell-main') {
             td.addEventListener('paste', handlePaste);
         }
-
+ 
         cellStateCache.set(td, td.innerHTML);
         tr.appendChild(td);
     });
-
+ 
     return tr;
 }
-
+ 
 function addRowAtEnd(content = '') {
     const tr = makeRow(content);
     tbody.appendChild(tr);
     return tr;
 }
-
+ 
 function insertRowAfter(refRow, content = '') {
     const tr = makeRow(content);
     refRow.nextSibling ? tbody.insertBefore(tr, refRow.nextSibling) : tbody.appendChild(tr);
     return tr;
 }
-
+ 
 function moveToNextCell(currentCell, currentRow) {
     const idx = Array.from(currentRow.cells).indexOf(currentCell);
     const nextRow = currentRow.nextElementSibling || insertRowAfter(currentRow);
@@ -464,7 +514,7 @@ function moveToNextCell(currentCell, currentRow) {
     exitEdit();
     setTimeout(() => enterEdit(nextCell), 0);
 }
-
+ 
 function getCursorPosition(cell, range) {
     if (!range) return (cell.textContent || '').length;
     const preRange = range.cloneRange();
@@ -472,7 +522,7 @@ function getCursorPosition(cell, range) {
     preRange.setEnd(range.endContainer, range.endOffset);
     return preRange.toString().length;
 }
-
+ 
 function setCaretToEnd(cell) {
     const range = document.createRange();
     range.selectNodeContents(cell);
@@ -481,10 +531,21 @@ function setCaretToEnd(cell) {
     sel.removeAllRanges();
     sel.addRange(range);
 }
-
-/* 초기 30행 */
+ 
+/* 초기 행: 샘플 데이터 + 빈 행으로 총 30행 채우기 */
 window.addEventListener('load', () => {
-    for (let i = 0; i < 30; i++) addRowAtEnd();
+    defaultRows.forEach(rowData => {
+        const tr = addRowAtEnd(rowData.main);
+        tr.cells[0].textContent = rowData.date;
+        tr.cells[2].textContent = rowData.note;
+        if (rowData.unused) {
+            const checkbox = tr.cells[3].querySelector('.unused-checkbox');
+            if (checkbox) checkbox.checked = true;
+        }
+    });
+    const remaining = Math.max(0, 30 - defaultRows.length);
+    for (let i = 0; i < remaining; i++) addRowAtEnd();
+ 
     attachDateInputEvents();
     const searchInput = document.getElementById('searchInput');
     searchInput.addEventListener('keydown', handleSearchKeydown);
@@ -507,20 +568,20 @@ window.addEventListener('load', () => {
         }
     });
 });
-
+ 
 /* 테이블 바깥 클릭 → 편집 종료 */
 document.addEventListener('mousedown', (e) => {
     if (editingCell && !editingCell.contains(e.target) && !toolbar.contains(e.target)) {
         exitEdit();
     }
-
+ 
     const results = document.getElementById('searchResults');
     const searchWrap = document.querySelector('.top-action-wrap');
     if (results && results.style.display === 'block' && searchWrap && !searchWrap.contains(e.target)) {
         closeSearch();
     }
 });
-
+ 
 /* ═══════════════════════════════════════
    붙여넣기
 ═══════════════════════════════════════ */
@@ -529,22 +590,22 @@ function handlePaste(e) {
     const text  = e.clipboardData.getData('text/plain');
     const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
     if (!lines.length) return;
-
+ 
     const td = e.currentTarget;
     const tr = td.closest('tr');
     const startIdx = Array.from(tbody.children).indexOf(tr);
     const changes = [];
-
+ 
     const selection = window.getSelection();
     const range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
-
+ 
     lines.forEach((line, i) => {
         let row = tbody.children[startIdx + i];
         if (!row) row = addRowAtEnd();
         const cell = row.cells[1];
         const before = cell.innerHTML;
         const plainText = line.replace(/\t/g, ' ').replace(/\r/g, '').replace(/\n/g, '');
-
+ 
         if (range && cell === td) {
             const fragment = document.createDocumentFragment();
             fragment.appendChild(document.createTextNode(plainText));
@@ -555,14 +616,14 @@ function handlePaste(e) {
         } else {
             cell.textContent = plainText;
         }
-
+ 
         changes.push({ td: cell, before, after: cell.innerHTML });
     });
-
+ 
     recordCellChanges(changes);
     pendingPasteUndo = { changes };
 }
-
+ 
 function restorePasteUndo() {
     if (!pendingPasteUndo) return;
     pendingPasteUndo.changes.forEach(({ td, before }) => {
@@ -571,7 +632,7 @@ function restorePasteUndo() {
     });
     pendingPasteUndo = null;
 }
-
+ 
 function handleCellInput(e) {
     const td = e.currentTarget;
     const before = cellStateCache.get(td) ?? td.innerHTML;
@@ -581,7 +642,7 @@ function handleCellInput(e) {
         cellStateCache.set(td, after);
     }
 }
-
+ 
 function pushHistory(action) {
     if (historyIndex < history.length - 1) {
         history = history.slice(0, historyIndex + 1);
@@ -589,7 +650,7 @@ function pushHistory(action) {
     history.push(action);
     historyIndex = history.length - 1;
 }
-
+ 
 function recordCellChanges(changes) {
     if (!changes.length) return;
     const valid = changes.filter(({ td, before, after }) => td && before !== after);
@@ -609,20 +670,20 @@ function recordCellChanges(changes) {
         }
     });
 }
-
+ 
 function undoLastAction() {
     if (historyIndex < 0) return;
     const action = history[historyIndex];
     historyIndex--;
     action.undo();
 }
-
+ 
 function redoLastAction() {
     if (historyIndex >= history.length - 1) return;
     historyIndex++;
     history[historyIndex].redo();
 }
-
+ 
 /* ═══════════════════════════════════════
    서식 툴바 — 읽기모드에서 드래그 선택 후 적용
 ═══════════════════════════════════════ */
@@ -633,15 +694,33 @@ document.addEventListener('mouseup', (e) => {
         if (sel && sel.rangeCount > 0 && sel.toString().length > 0) {
             savedSel = sel.getRangeAt(0).cloneRange();
             const rect = savedSel.getBoundingClientRect();
-            toolbar.style.top  = (rect.bottom + window.scrollY + 8) + 'px';
-            toolbar.style.left = Math.max(4, rect.left + window.scrollX) + 'px';
+            // toolbar는 position:fixed 이므로 뷰포트 기준 좌표를 그대로 사용해야 함
+            // (기존 코드는 여기에 window.scrollY/scrollX를 더해서 스크롤할수록
+            //  선택한 텍스트와 툴바 사이 간격이 계속 벌어지다가 화면 밖으로 벗어나는 버그가 있었음)
+            let top = rect.bottom + 8;
+            let left = rect.left;
+ 
+            // 화면 밖으로 나가지 않도록 최소한의 보정만 적용
+            const toolbarWidth = toolbar.offsetWidth || 160;
+            const toolbarHeight = toolbar.offsetHeight || 60;
+            if (left + toolbarWidth > window.innerWidth) {
+                left = window.innerWidth - toolbarWidth - 4;
+            }
+            if (left < 4) left = 4;
+            if (top + toolbarHeight > window.innerHeight) {
+                top = rect.top - toolbarHeight - 8;
+            }
+            if (top < 4) top = 4;
+ 
+            toolbar.style.top  = top + 'px';
+            toolbar.style.left = left + 'px';
             toolbar.style.display = 'flex';
         } else if (!toolbar.contains(e.target)) {
             toolbar.style.display = 'none';
         }
     }, 10);
 });
-
+ 
 document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -670,7 +749,7 @@ document.addEventListener('keydown', (e) => {
         return;
     }
 });
-
+ 
 function createStyledWrapper(cmd, val) {
     if (cmd === 'bold') return document.createElement('strong');
     const span = document.createElement('span');
@@ -686,29 +765,29 @@ function createStyledWrapper(cmd, val) {
     }
     return span;
 }
-
+ 
 function sanitizeCellContent(cell) {
     return cell.innerHTML;
 }
-
+ 
 function applyStyleToSelection(range, cmd, val) {
     const sel = window.getSelection();
     if (!sel || !range || range.collapsed || range.toString().trim() === '') return false;
-
+ 
     const allCells = Array.from(tbody.querySelectorAll('td'));
     const affectedCells = allCells.filter(cell => {
         const cellRange = document.createRange();
         cellRange.selectNodeContents(cell);
         return range.intersectsNode(cell);
     });
-
+ 
     if (!affectedCells.length) return false;
-
+ 
     const changes = [];
     affectedCells.forEach(cell => {
         changes.push({ td: cell, before: cell.innerHTML });
     });
-
+ 
     if (affectedCells.length > 1) {
         affectedCells.forEach(cell => {
             const wrapper = createStyledWrapper(cmd, val);
@@ -724,13 +803,13 @@ function applyStyleToSelection(range, cmd, val) {
         wrapper.appendChild(fragment);
         range.insertNode(wrapper);
     }
-
+ 
     affectedCells.forEach(cell => {
         changes.find(change => change.td === cell).after = cell.innerHTML;
     });
-
+ 
     recordCellChanges(changes);
-
+ 
     const newRange = document.createRange();
     newRange.selectNodeContents(affectedCells[affectedCells.length - 1]);
     newRange.collapse(false);
@@ -739,19 +818,19 @@ function applyStyleToSelection(range, cmd, val) {
     savedSel = newRange.cloneRange();
     return true;
 }
-
+ 
 function fmt(cmd, val) {
     // 선택 영역을 임시로 contenteditable 컨테이너 안에 복사해서 서식 적용
     if (!savedSel) return;
-
+ 
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(savedSel);
-
+ 
     if (['bold','backColor','foreColor','strikeThrough'].includes(cmd)) {
         if (applyStyleToSelection(sel.getRangeAt(0), cmd, val)) return;
     }
-
+ 
     // 선택된 범위 내 모든 td를 찾아 일시적으로 편집 가능하게
     const affectedTds = new Set();
     const beforeStates = new Map();
@@ -763,12 +842,12 @@ function fmt(cmd, val) {
             affectedTds.add(td);
         }
     });
-
+ 
     affectedTds.forEach(td => {
         beforeStates.set(td, td.innerHTML);
         td.contentEditable = 'true';
     });
-
+ 
     if (cmd === 'backColor') {
         if (val === 'transparent') {
             const selectedNodes = Array.from(sel.getRangeAt(0).cloneContents().querySelectorAll('span'));
@@ -790,10 +869,10 @@ function fmt(cmd, val) {
     } else {
         document.execCommand(cmd, false, val || null);
     }
-
+ 
     // 선택 영역 저장 업데이트
     if (sel.rangeCount > 0) savedSel = sel.getRangeAt(0).cloneRange();
-
+ 
     const styleChanges = [];
     affectedTds.forEach(td => {
         const before = beforeStates.get(td);
@@ -802,7 +881,7 @@ function fmt(cmd, val) {
     });
     recordCellChanges(styleChanges);
 }
-
+ 
 /* ═══════════════════════════════════════
    검색
 ═══════════════════════════════════════ */
@@ -861,7 +940,13 @@ function printChart() {
 function saveChart() {
     const customerName = document.querySelector('h1 [contenteditable="true"]')?.textContent?.trim() || '고객';
     const rows = Array.from(tbody.rows).map(row => {
-        return Array.from(row.cells).map(cell => (cell.textContent || '').trim()).join('\t');
+        return Array.from(row.cells).map((cell, idx) => {
+            if (idx === 3) {
+                const checkbox = cell.querySelector('.unused-checkbox');
+                return checkbox && checkbox.checked ? 'O' : '';
+            }
+            return (cell.textContent || '').trim();
+        }).join('\t');
     }).filter(text => text.trim() !== '');
     const text = ['고객명: ' + customerName, ...rows].join('\n');
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
@@ -903,12 +988,11 @@ function openCopyModal() {
     const modal = document.getElementById('copyModal');
     const fromInput = document.getElementById('copyFrom');
     const toInput = document.getElementById('copyTo');
-    const previewBox = document.getElementById('previewBox');
     fromInput.value = '';
     toInput.value = '';
-    previewBox.style.display = 'none';
-    previewBox.innerHTML = '';
     modal.style.display = 'flex';
+    // from/to를 지정하지 않은 상태 = 전체 내역이 디폴트로 보이도록
+    showHistoryPreview();
 }
 function closeCopyModal() {
     document.getElementById('copyModal').style.display = 'none';
@@ -918,37 +1002,37 @@ function openUnusedModal() {
     const previewBox = document.getElementById('unusedPreviewBox');
     const entries = [];
     let currentDate = '';
-
+ 
     Array.from(tbody.rows).forEach(row => {
         const resolved = resolveRowDate(row, currentDate);
         const dateText = resolved.dateText;
         currentDate = resolved.nextCurrentDate;
         const mainText = (row.cells[1]?.textContent || '').trim();
-        const unusedText = (row.cells[3]?.textContent || '').trim();
-        if (!unusedText) return;
+        const unusedCheckbox = row.cells[3]?.querySelector('.unused-checkbox');
+        const isUnused = !!(unusedCheckbox && unusedCheckbox.checked);
+        if (!isUnused) return;
         entries.push({
             dateText,
-            mainText,
-            unusedText
+            mainText
         });
     });
-
+ 
     entries.sort((a, b) => toComparableDate(a.dateText).localeCompare(toComparableDate(b.dateText)));
-
+ 
     const grouped = [];
     entries.forEach(item => {
         const last = grouped[grouped.length - 1];
         if (last && last.date === item.dateText) {
-            last.items.push(`${item.mainText}  ${item.unusedText}`);
+            last.items.push(item.mainText);
         } else {
-            grouped.push({ date: item.dateText, items: [`${item.mainText}  ${item.unusedText}`] });
+            grouped.push({ date: item.dateText, items: [item.mainText] });
         }
     });
-
+ 
     const text = grouped.length
         ? grouped.map(group => `${group.date}\n${group.items.join('\n')}`).join('\n\n')
         : '미사용 시술 내역이 없습니다.';
-
+ 
     previewBox.textContent = text;
     modal.style.display = 'flex';
 }
@@ -959,7 +1043,7 @@ function copyUnusedText() {
     const previewBox = document.getElementById('unusedPreviewBox');
     const text = previewBox.textContent || '';
     if (!text) return;
-
+ 
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).catch(() => fallbackCopyText(text));
     } else {
@@ -994,30 +1078,30 @@ function showHistoryPreview() {
     const toValue = toComparableDate(to);
     const rows = [];
     let currentDate = '';
-
+ 
     Array.from(tbody.rows).forEach(row => {
         const mainText = (row.cells[1]?.textContent || '').trim();
         if (!mainText) return;
-
+ 
         const resolved = resolveRowDate(row, currentDate);
         const dateText = resolved.dateText;
         const dateValue = toComparableDate(dateText);
         if (!dateText) return;
         if (fromValue && dateValue < fromValue) return;
         if (toValue && dateValue > toValue) return;
-
+ 
         currentDate = resolved.nextCurrentDate;
         rows.push({ dateText, mainText });
     });
-
+ 
     rows.sort((a, b) => toComparableDate(a.dateText).localeCompare(toComparableDate(b.dateText)));
-
+ 
     if (!rows.length) {
         previewBox.innerHTML = '선택한 기간의 내역이 없습니다.';
         previewBox.style.display = 'block';
         return;
     }
-
+ 
     const grouped = [];
     rows.forEach(item => {
         const last = grouped[grouped.length - 1];
@@ -1027,7 +1111,7 @@ function showHistoryPreview() {
             grouped.push({ date: item.dateText, items: [item.mainText] });
         }
     });
-
+ 
     previewBox.innerHTML = grouped.map(group => `${group.date}\n${group.items.join('\n')}`).join('\n\n');
     previewBox.style.display = 'block';
 }
@@ -1035,7 +1119,7 @@ function downloadHistoryPreview() {
     const previewBox = document.getElementById('previewBox');
     const text = previewBox.innerText || previewBox.textContent || '';
     if (!text) return;
-
+ 
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1094,11 +1178,11 @@ function jumpTo(ri) {
     const box = document.getElementById('searchResults');
     if (box) box.style.display = 'none';
 }
-
+ 
 function copySelection() {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.toString().trim() === '') return false;
-
+ 
     const text = selection.toString();
     try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1109,18 +1193,18 @@ function copySelection() {
     } catch (e) {
         document.execCommand('copy');
     }
-
+ 
     toolbar.style.display = 'none';
     return true;
 }
-
+ 
 function cutSelection() {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.toString().trim() === '') return false;
-
+ 
     const text = selection.toString();
     const range = selection.getRangeAt(0);
-
+ 
     try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text);
@@ -1132,10 +1216,15 @@ function cutSelection() {
     } catch (e) {
         document.execCommand('cut');
     }
-
+ 
     toolbar.style.display = 'none';
     return true;
 }
 </script>
 </body>
 </html>
+ 
+
+
+미사용/잔여
+2/3
