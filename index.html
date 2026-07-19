@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>병원 차트 편집기</title>
+    <title>블리비 홍대점 고객차트</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -76,10 +76,9 @@
 
         /* 검색 */
         #searchBar {
-            position: fixed; top: 20px; right: 20px;
-            background: #fff; border: 1px solid #cbd5e1;
-            padding: 10px; border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            background: transparent; border: none;
+            padding: 0; border-radius: 0;
+            box-shadow: none;
             z-index: 1500; display: none; gap: 6px; align-items: center;
         }
         #searchInput {
@@ -87,12 +86,47 @@
             border-radius: 4px; font-size: 14px; width: 220px; outline: none;
         }
         #searchResults {
-            position: fixed; top: 72px; right: 20px;
+            position: absolute; top: calc(100% + 8px); right: 0;
             background: #fff; border: 1px solid #cbd5e1;
             border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 1500; display: none;
+            z-index: 1600; display: none;
             max-height: 380px; overflow-y: auto; min-width: 290px;
         }
+        .action-btn {
+            border: 1px solid #cbd5e1; background: #fff; color: #334155;
+            padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer;
+        }
+        .action-btn:hover { background: #f8fafc; }
+        .action-btn.primary {
+            background: #4b5563; color: #fff; border-color: #4b5563;
+            font-weight: 700;
+        }
+        .action-btn.primary:hover { background: #374151; }
+        .top-action-wrap { position: relative; }
+        #copyModal,
+        #unusedModal {
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+            display: none; align-items: center; justify-content: center; z-index: 3000;
+        }
+        #copyModal .modal-card,
+        #unusedModal .modal-card {
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+            padding: 16px; width: min(92vw, 420px); box-shadow: 0 10px 24px rgba(0,0,0,0.2);
+        }
+        #copyModal label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #334155; }
+        #copyModal input { border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 8px; }
+        #copyModal .modal-head,
+        #unusedModal .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        #copyModal .close-btn,
+        #unusedModal .close-btn { border: none; background: transparent; color: #64748b; font-size: 18px; cursor: pointer; }
+        #copyModal .preview-box,
+        #unusedModal .preview-box {
+            margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;
+            max-height: 260px; overflow-y: auto; background: #f8fafc; font-size: 13px; line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        #copyModal .preview-actions,
+        #unusedModal .preview-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
         .sr-item { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; }
         .sr-item:hover { background: #f0f4f8; }
         .sr-item:last-child { border-bottom: none; }
@@ -100,18 +134,25 @@
         .sr-date { font-weight: 700; font-size: 12px; color: #475569; margin-bottom: 3px; }
         .sr-text { font-size: 13px; color: #64748b; }
         .hl { background: #fce7f3; font-weight: bold; }
+        .search-match { background: #fce7f3 !important; }
+        .search-match-active { background: #fbcfe8 !important; box-shadow: inset 0 0 0 1px #ec4899; }
+        .print-hide { display: block; }
+        body.printing .print-hide,
+        body.printing .action-btn,
+        body.printing #searchBar,
+        body.printing #searchResults,
+        body.printing .top-action-wrap {
+            display: none !important;
+        }
+        body.printing .max-w-5xl {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            background: #fff !important;
+        }
     </style>
 </head>
 <body class="bg-gray-50 p-6">
-
-<!-- 검색바 -->
-<div id="searchBar" class="flex">
-    <input id="searchInput" type="text" placeholder="검색어 입력..."
-           onkeydown="if(event.key==='Enter') doSearch()">
-    <button onclick="doSearch()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold">검색</button>
-    <button onclick="closeSearch()" class="bg-gray-100 px-2 py-1 rounded text-sm">✕</button>
-</div>
-<div id="searchResults"></div>
 
 <!-- 서식 툴바 -->
 <div id="toolbar" class="flex">
@@ -137,22 +178,27 @@
 </div>
 
 <!-- 메인 카드 -->
-<div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-    <div class="flex justify-between items-center mb-5">
-        <h1 class="font-bold text-xl text-gray-800">
-            고객명:&nbsp;<span contenteditable="true" class="border-b px-2 outline-none">강블리1234</span>
-        </h1>
-        <div class="flex items-center gap-2">
-            <button onclick="undoLastAction()" class="text-sm bg-gray-100 px-3 py-1 rounded">↩</button>
-            <button onclick="redoLastAction()" class="text-sm bg-gray-100 px-3 py-1 rounded">↪</button>
-            <button class="text-sm bg-gray-100 px-3 py-1 rounded border">차트내역복사</button>
-            <button class="text-sm bg-gray-100 px-3 py-1 rounded border">미사용시술 정리</button>
-            <button onclick="toggleSearch()" class="text-gray-600 hover:text-blue-600">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-            </button>
+<div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-sm border border-gray-200 relative">
+    <div class="flex flex-col gap-3 mb-5">
+        <div class="flex justify-between items-start gap-3">
+            <h1 class="font-bold text-xl text-gray-800">
+                고객명:&nbsp;<span contenteditable="true" class="border-b px-2 outline-none">강블리1234</span>
+            </h1>
+            <div class="print-hide flex flex-wrap justify-end gap-2">
+                <button onclick="printChart()" class="action-btn">인쇄</button>
+                <button onclick="openCopyModal()" class="action-btn">내역다운로드</button>
+                <button onclick="openUnusedModal()" class="action-btn">미사용시술</button>
+                <button onclick="saveChart()" class="action-btn primary">저장</button>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+            <div class="top-action-wrap print-hide">
+                <div id="searchBar" class="flex" style="display:flex;">
+                    <input id="searchInput" type="text" placeholder="차트 검색">
+                    <button onclick="doSearch()" class="bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-bold border border-gray-300">검색</button>
+                </div>
+                <div id="searchResults"></div>
+            </div>
         </div>
     </div>
 
@@ -172,6 +218,43 @@
     </table>
 </div>
 
+<div id="copyModal">
+    <div class="modal-card">
+        <div class="modal-head">
+            <div class="font-bold text-base">차트 내역 보기</div>
+            <button onclick="closeCopyModal()" class="close-btn" title="닫기">✕</button>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <label>FROM
+                <input id="copyFrom" type="text" placeholder="YYYYMMDD" inputmode="numeric">
+            </label>
+            <label>TO
+                <input id="copyTo" type="text" placeholder="YYYYMMDD" inputmode="numeric">
+            </label>
+        </div>
+        <div class="flex justify-end gap-2">
+            <button onclick="showHistoryPreview()" class="bg-gray-700 text-white px-3 py-1 rounded text-sm font-bold">내역보기</button>
+        </div>
+        <div class="preview-actions">
+            <button onclick="downloadHistoryPreview()" class="bg-white border border-gray-300 text-gray-700 px-3 py-1 rounded text-sm font-bold">다운로드</button>
+        </div>
+        <div id="previewBox" class="preview-box" style="display:none;"></div>
+    </div>
+</div>
+
+<div id="unusedModal">
+    <div class="modal-card">
+        <div class="modal-head">
+            <div class="font-bold text-base">미사용 시술 정리</div>
+            <button onclick="closeUnusedModal()" class="close-btn" title="닫기">✕</button>
+        </div>
+        <div id="unusedPreviewBox" class="preview-box" style="display:block;"></div>
+        <div class="preview-actions">
+            <button onclick="copyUnusedText()" class="bg-white border border-gray-300 text-gray-700 px-3 py-1 rounded text-sm font-bold">복사</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const tbody  = document.getElementById('chartBody');
 const toolbar = document.getElementById('toolbar');
@@ -184,6 +267,8 @@ let redoStack = [];
 const cellStateCache = new WeakMap();
 let history = [];
 let historyIndex = -1;
+let currentSearchQuery = '';
+let searchHighlightedRows = [];
 
 /* ═══════════════════════════════════════
    셀 편집 모드 진입 / 종료
@@ -241,6 +326,10 @@ function makeRow(content = '') {
 
         // 이미 편집 중인 셀 클릭 → 그냥 유지
         td.addEventListener('click', (e) => {
+            const currentRow = td.closest('tr');
+            if (currentRow && searchHighlightedRows.includes(currentRow)) {
+                clearSearchHighlights();
+            }
             if (editingCell === td) e.stopPropagation();
         });
 
@@ -396,12 +485,39 @@ function setCaretToEnd(cell) {
 /* 초기 30행 */
 window.addEventListener('load', () => {
     for (let i = 0; i < 30; i++) addRowAtEnd();
+    attachDateInputEvents();
+    const searchInput = document.getElementById('searchInput');
+    searchInput.addEventListener('keydown', handleSearchKeydown);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const bar = document.getElementById('searchBar');
+            const input = document.getElementById('searchInput');
+            const results = document.getElementById('searchResults');
+            if (results && results.style.display === 'block') {
+                e.preventDefault();
+                e.stopPropagation();
+                closeSearch();
+                return;
+            }
+            if (bar && bar.style.display === 'flex' && document.activeElement === input) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeSearch();
+            }
+        }
+    });
 });
 
 /* 테이블 바깥 클릭 → 편집 종료 */
 document.addEventListener('mousedown', (e) => {
     if (editingCell && !editingCell.contains(e.target) && !toolbar.contains(e.target)) {
         exitEdit();
+    }
+
+    const results = document.getElementById('searchResults');
+    const searchWrap = document.querySelector('.top-action-wrap');
+    if (results && results.style.display === 'block' && searchWrap && !searchWrap.contains(e.target)) {
+        closeSearch();
     }
 });
 
@@ -692,21 +808,259 @@ function fmt(cmd, val) {
 ═══════════════════════════════════════ */
 function toggleSearch() {
     const bar = document.getElementById('searchBar');
-    bar.style.display === 'flex' ? closeSearch() : (bar.style.display = 'flex', document.getElementById('searchInput').focus());
+    const input = document.getElementById('searchInput');
+    if (bar.style.display === 'flex') {
+        closeSearch();
+    } else {
+        bar.style.display = 'flex';
+        input.focus();
+        input.select();
+    }
 }
 function closeSearch() {
-    document.getElementById('searchBar').style.display = 'none';
-    document.getElementById('searchResults').style.display = 'none';
+    const results = document.getElementById('searchResults');
+    if (results) results.style.display = 'none';
+}
+function closeSearchAndKeepBar() {
+    closeSearch();
+}
+function clearSearchHighlights() {
+    searchHighlightedRows.forEach(row => {
+        row.classList.remove('search-match', 'search-match-active');
+    });
+    searchHighlightedRows = [];
+}
+function applySearchHighlights(q) {
+    clearSearchHighlights();
+    if (!q) return;
+    Array.from(tbody.rows).forEach(row => {
+        const text = Array.from(row.cells).map(c => c.textContent).join(' ');
+        if (text.toLowerCase().includes(q)) {
+            row.classList.add('search-match');
+            searchHighlightedRows.push(row);
+        }
+    });
+}
+function handleSearchKeydown(e) {
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSearch();
+        return;
+    }
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        doSearch();
+    }
+}
+function printChart() {
+    document.body.classList.add('printing');
+    window.print();
+    setTimeout(() => document.body.classList.remove('printing'), 500);
+}
+function saveChart() {
+    const customerName = document.querySelector('h1 [contenteditable="true"]')?.textContent?.trim() || '고객';
+    const rows = Array.from(tbody.rows).map(row => {
+        return Array.from(row.cells).map(cell => (cell.textContent || '').trim()).join('\t');
+    }).filter(text => text.trim() !== '');
+    const text = ['고객명: ' + customerName, ...rows].join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'chart.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+function normalizeDateInput(value) {
+    const digits = (value || '').replace(/\D/g, '');
+    if (digits.length <= 4) return digits;
+    if (digits.length <= 6) return `${digits.slice(0,4)}-${digits.slice(4)}`;
+    if (digits.length <= 8) return `${digits.slice(0,4)}-${digits.slice(4,6)}-${digits.slice(6,8)}`;
+    return `${digits.slice(0,4)}-${digits.slice(4,6)}-${digits.slice(6,8)}`;
+}
+function toComparableDate(value) {
+    const normalized = normalizeDateInput(value);
+    const digits = normalized.replace(/\D/g, '');
+    return digits.length === 8 ? digits : '';
+}
+function formatDisplayDate(value) {
+    const digits = toComparableDate(value);
+    if (!digits) return value || '';
+    return `${digits.slice(0,4)}-${digits.slice(4,6)}-${digits.slice(6,8)}`;
+}
+function resolveRowDate(row, currentDate) {
+    const rawDate = (row.cells[0]?.textContent || '').trim();
+    const dateText = rawDate ? formatDisplayDate(rawDate) : currentDate;
+    return {
+        dateText,
+        nextCurrentDate: rawDate ? dateText : currentDate
+    };
+}
+function openCopyModal() {
+    const modal = document.getElementById('copyModal');
+    const fromInput = document.getElementById('copyFrom');
+    const toInput = document.getElementById('copyTo');
+    const previewBox = document.getElementById('previewBox');
+    fromInput.value = '';
+    toInput.value = '';
+    previewBox.style.display = 'none';
+    previewBox.innerHTML = '';
+    modal.style.display = 'flex';
+}
+function closeCopyModal() {
+    document.getElementById('copyModal').style.display = 'none';
+}
+function openUnusedModal() {
+    const modal = document.getElementById('unusedModal');
+    const previewBox = document.getElementById('unusedPreviewBox');
+    const entries = [];
+    let currentDate = '';
+
+    Array.from(tbody.rows).forEach(row => {
+        const resolved = resolveRowDate(row, currentDate);
+        const dateText = resolved.dateText;
+        currentDate = resolved.nextCurrentDate;
+        const mainText = (row.cells[1]?.textContent || '').trim();
+        const unusedText = (row.cells[3]?.textContent || '').trim();
+        if (!unusedText) return;
+        entries.push({
+            dateText,
+            mainText,
+            unusedText
+        });
+    });
+
+    entries.sort((a, b) => toComparableDate(a.dateText).localeCompare(toComparableDate(b.dateText)));
+
+    const grouped = [];
+    entries.forEach(item => {
+        const last = grouped[grouped.length - 1];
+        if (last && last.date === item.dateText) {
+            last.items.push(`${item.mainText}  ${item.unusedText}`);
+        } else {
+            grouped.push({ date: item.dateText, items: [`${item.mainText}  ${item.unusedText}`] });
+        }
+    });
+
+    const text = grouped.length
+        ? grouped.map(group => `${group.date}\n${group.items.join('\n')}`).join('\n\n')
+        : '미사용 시술 내역이 없습니다.';
+
+    previewBox.textContent = text;
+    modal.style.display = 'flex';
+}
+function closeUnusedModal() {
+    document.getElementById('unusedModal').style.display = 'none';
+}
+function copyUnusedText() {
+    const previewBox = document.getElementById('unusedPreviewBox');
+    const text = previewBox.textContent || '';
+    if (!text) return;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => fallbackCopyText(text));
+    } else {
+        fallbackCopyText(text);
+    }
+}
+function fallbackCopyText(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+}
+function attachDateInputEvents() {
+    const fromInput = document.getElementById('copyFrom');
+    const toInput = document.getElementById('copyTo');
+    [fromInput, toInput].forEach(input => {
+        input.addEventListener('input', () => {
+            input.value = normalizeDateInput(input.value);
+        });
+    });
+}
+function showHistoryPreview() {
+    const from = document.getElementById('copyFrom').value;
+    const to = document.getElementById('copyTo').value;
+    const previewBox = document.getElementById('previewBox');
+    const fromValue = toComparableDate(from);
+    const toValue = toComparableDate(to);
+    const rows = [];
+    let currentDate = '';
+
+    Array.from(tbody.rows).forEach(row => {
+        const mainText = (row.cells[1]?.textContent || '').trim();
+        if (!mainText) return;
+
+        const resolved = resolveRowDate(row, currentDate);
+        const dateText = resolved.dateText;
+        const dateValue = toComparableDate(dateText);
+        if (!dateText) return;
+        if (fromValue && dateValue < fromValue) return;
+        if (toValue && dateValue > toValue) return;
+
+        currentDate = resolved.nextCurrentDate;
+        rows.push({ dateText, mainText });
+    });
+
+    rows.sort((a, b) => toComparableDate(a.dateText).localeCompare(toComparableDate(b.dateText)));
+
+    if (!rows.length) {
+        previewBox.innerHTML = '선택한 기간의 내역이 없습니다.';
+        previewBox.style.display = 'block';
+        return;
+    }
+
+    const grouped = [];
+    rows.forEach(item => {
+        const last = grouped[grouped.length - 1];
+        if (last && last.date === item.dateText) {
+            last.items.push(item.mainText);
+        } else {
+            grouped.push({ date: item.dateText, items: [item.mainText] });
+        }
+    });
+
+    previewBox.innerHTML = grouped.map(group => `${group.date}\n${group.items.join('\n')}`).join('\n\n');
+    previewBox.style.display = 'block';
+}
+function downloadHistoryPreview() {
+    const previewBox = document.getElementById('previewBox');
+    const text = previewBox.innerText || previewBox.textContent || '';
+    if (!text) return;
+
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'history-preview.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 function doSearch() {
     const q = document.getElementById('searchInput').value.toLowerCase().trim();
-    if (!q) return;
+    currentSearchQuery = q;
+    if (!q) {
+        clearSearchHighlights();
+        closeSearch();
+        return;
+    }
     const results = [];
     Array.from(tbody.rows).forEach((row, ri) => {
         const text = Array.from(row.cells).map(c => c.textContent).join(' ');
         if (text.toLowerCase().includes(q))
             results.push({ ri, preview: row.cells[1].textContent });
     });
+    applySearchHighlights(q);
     const box = document.getElementById('searchResults');
     if (!results.length) {
         box.innerHTML = '<div class="sr-none">검색 결과가 없습니다</div>';
@@ -734,10 +1088,11 @@ function hl(text, q) {
 function jumpTo(ri) {
     const row = tbody.rows[ri];
     if (!row) return;
-    row.style.backgroundColor = '#fce7f3';
+    searchHighlightedRows.forEach(r => r.classList.remove('search-match-active'));
+    row.classList.add('search-match-active');
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(() => { row.style.backgroundColor = ''; }, 2000);
-    closeSearch();
+    const box = document.getElementById('searchResults');
+    if (box) box.style.display = 'none';
 }
 
 function copySelection() {
